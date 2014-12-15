@@ -7,6 +7,12 @@ html, body, #app, .full-height {
 body {
     padding: 0;
     margin: 0;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -khtml-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
 }
 .page-title {
     text-align: center;
@@ -21,7 +27,7 @@ body {
     max-width: 400px;
     height: 100%;
     background-color: #ccc;
-    transition: all 0.2s ease-out;
+    /* transition: all 0.2s ease-out; */
 }
 
 #left-slide-menu.hide-menu {
@@ -49,13 +55,13 @@ ul {
 }
 
 .selected {
-    background-color: red;
+    background-color: grey;
 }
 
 #top-bar {
     height: 40px;
     width: 100%;
-    background-color: red;
+    background-color: grey;
     margin: 0;
 }
 

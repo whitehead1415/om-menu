@@ -17,10 +17,6 @@
 ;;; Events
 
 
-(def classes
-  {:menu-on "show-menu"
-   :menu-off "hide-menu"})
-
 (def keyword->event-type
   {:mousedown EventType/MOUSEDOWN
    :mouseup EventType/MOUSEUP
@@ -40,28 +36,32 @@
         start-chan (listen el :mousedown)
         move-chan (listen el :mousemove)
         end-chan (listen el :mouseup)]
-    (go (loop [engaged? false moved? false]
-          (let [[v c] (alts! [start-chan move-chan end-chan])]
+    (go (loop [engaged? false moved? false old-time nil old-x nil old-y nil old-v nil]
+          (let [[v c] (alts! [start-chan move-chan end-chan])
+                x (.-clientX v)
+                y (.-clientY v)
+                now (.now js/Date)]
             (condp = c
               start-chan (if (start-predicate v) 
-                           (do 
-                             (>! out {:type :start :x (.-clientX v) :y (.-clientY v)})
-                             (recur true false))
-                           (recur false false))
-              end-chan (do 
-                         (when (and moved? engaged?)
-                           (>! out {:type :end :x (.-clientX v) :y (.-clientY v)}))
-                         (recur false false))
-              move-chan (do
-                          (when engaged? (>! out {:type :move :x (.-clientX v) :y (.-clientY v)}))
-                          (recur engaged? true)))
+                           (do (>! out {:type :start :x x :y y})
+                               (recur true false now x y nil))
+                           (recur false false nil nil nil nil))
+              end-chan (do (when (and moved? engaged?)
+                             (>! out {:type :end :x x :y y :velocity old-v}))
+                           (recur false false nil nil nil nil))
+              move-chan (do (if engaged? 
+                              (let [diff_x (- x old-x)
+                                    diff_y (- y old-y)
+                                    interval (- now old-time)
+                                    velocity (/ diff_x interval)]
+                                (>! out {:type :move :x x :y y :velocity velocity})
+                                (recur engaged? true now x y velocity))
+                              (recur false false nil nil nil nil))))
             (close! out))))
     out))
 
 
 ;;; Model
-
-(def css-trans-group (-> js/React (aget "addons") (aget "CSSTransitionGroup"))) 
 
 (def app-state (atom {:main-page {:current-page :title-view
                                   :pages {:title-view {:type "title-view" :title "This is a title page"}
@@ -125,12 +125,19 @@
          (= type "image-view") (om/build image-view page)
          (= type "list-view") (om/build list-view page))))))
 
+(defn animate [owner attr target-value duration ease]
+  (let [interpolator (.interpolate js/d3 (om/get-state owner attr), target-value)]
+    (-> (.transition js/d3)
+        (.duration 200)
+        (.ease "cubic-out")
+        (.tween attr (fn [] (fn [t] (om/set-state! owner attr (interpolator t))))))
+    ))
+
 (defn app [app-state owner]
   (reify
     om/IInitState
     (init-state [this] 
-      {:menu-on? false 
-       :menu-chan (chan)
+      {:menu-chan (chan)
        :resize-chan (chan)
        :menu-x-pos: 0
        :menu-width: 0
@@ -151,8 +158,9 @@
             resize-chan (om/get-state owner :resize-chan)]
         (go (loop []
               (if (= (<! menu-chan) true)
-                (om/set-state! owner :menu-x-pos 0)
-                (om/set-state! owner :menu-x-pos (- (om/get-state owner :menu-width))))
+                (do 
+                  (animate owner :menu-x-pos 0))
+                (animate owner :menu-x-pos (- (om/get-state owner :menu-width))))
               (recur)))
         (go (loop []
               (let [drag-event (<! drag-chan)
@@ -161,15 +169,16 @@
                     menu-width (om/get-state owner :menu-width)]
                 (condp = (:type drag-event)
                   :start (om/set-state! owner :drag-start-point (.abs js/Math (- old-x (- x menu-width))))
-                  :end (do
-                         (om/set-state! owner :drag-start-point 0)
-                         (if (< x (/ menu-width 2)) 
-                           (>! menu-chan false)
-                           (>! menu-chan true)))
+                  :end (do (om/set-state! owner :drag-start-point 0)
+                           (cond 
+                            (> (:velocity drag-event) 1) (>! menu-chan true)
+                            (< (:velocity drag-event) -1) (>! menu-chan false)
+                            (> (+ menu-width old-x) (/ menu-width 2)) (>! menu-chan true)
+                            :else (>! menu-chan false)))
                   (when (< (+ x (om/get-state owner :drag-start-point)) menu-width)
-                      (om/set-state! owner :menu-x-pos (+ 
-                                                        (- x menu-width)
-                                                        (om/get-state owner :drag-start-point))))))
+                    (om/set-state! owner :menu-x-pos (+ 
+                                                      (- x menu-width)
+                                                      (om/get-state owner :drag-start-point))))))
               (recur)))
         (go (loop []
               (let [resize-event (<! resize-chan)
@@ -185,16 +194,19 @@
         (listen js/window :resize nil (om/get-state owner :resize-chan))))
 
     om/IRenderState
-    (render-state [this {:keys [menu-chan menu-on? menu-x-pos]}]
+    (render-state [this {:keys [menu-chan menu-x-pos menu-width]}]
       (dom/div #js{:className "full-height"}
-               (dom/div #js{:id "main-page-wrapper" :className (if menu-on? "menu-on" "menu-off")}
+               (dom/div #js{:id "main-page-wrapper"}
                         (dom/div #js{:id "top-bar"}
                                  (dom/button #js{:id "hamburger-btn"
                                                  :onClick #(put! menu-chan true)} 
                                              "\u2630"))
                         (om/build main-page (:main-page app-state))
-                        (let [class "main-page-overlay"]
-                          (dom/div #js{:className (if menu-on? class (str class " hide")) 
+                        (let [percent-showing (/ (- menu-width (.abs js/Math menu-x-pos)) menu-width)
+                              menu-on? (if (> percent-showing 0) true false)]
+                          (dom/div #js{:style #js{:opacity percent-showing
+                                                  :visibility (if (> percent-showing 0) "visible" "hidden")}
+                                       :className "main-page-overlay"
                                        :onClick #(put! menu-chan false)})))
                (dom/div #js{:id "left-slide-menu" 
                             :style #js{:transform (str "translate3d(" menu-x-pos "px, 0, 0)")}

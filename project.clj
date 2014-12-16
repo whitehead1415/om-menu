@@ -31,7 +31,8 @@
                          :optimizations :advanced
                          :pretty-print false
                          :preamble ["react/react.min.js"]
-                         :externs ["react/externs/react.js"]}}]}
+                         :externs ["react/externs/react.js"
+                                   "externs/d3_externs_min.js"]}}]}
   :figwheel {
              :http-server-root "public" ;; default and assumes "resources" 
              :server-port 3449 ;; default

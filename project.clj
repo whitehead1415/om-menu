@@ -1,4 +1,4 @@
-(defproject om-menu "0.1.0-SNAPSHOT"
+(defproject it "0.1.0-SNAPSHOT"
   :description "FIXME: write this!"
   :url "http://example.com/FIXME"
   :license {:name "Eclipse Public License"
@@ -21,13 +21,13 @@
   :cljsbuild {
     :builds [{:id "dev"
               :source-paths ["src"]
-              :compiler {:output-to "resources/public/js/compiled/om_menu.js"
+              :compiler {:output-to "resources/public/js/compiled/it.js"
                          :output-dir "resources/public/js/compiled/out"
                          :optimizations :none
                          :source-map true}}
              {:id "min"
               :source-paths ["src"]
-              :compiler {:output-to "www/om_menu.min.js"
+              :compiler {:output-to "www/it.min.js"
                          :optimizations :advanced
                          :pretty-print false
                          :preamble ["react/react.min.js"]

@@ -52,7 +52,7 @@
        out)))
 
 
-(defn nav-chans []
+(defn nav-chans [pub-chan]
   (let [h (History.)
         in (chan)]
     (doto h (.setEnabled true))

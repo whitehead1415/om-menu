@@ -46,6 +46,10 @@ ul {
     padding: 0;
 }
 
+.side-menu-list-item.active{
+    background-color: #999;
+}
+
 .side-menu-list-item {
     padding: 0.2em 1em;
     margin: none;

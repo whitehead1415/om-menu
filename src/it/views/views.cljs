@@ -13,16 +13,45 @@
     (render [this]
       (let [href (:href item)
             title (:title item)
-            class (:class item)]
-        (dom/li #js{:onClick #(set! (.-hash js/location) href)
+            base-class "default-list-item"
+            class (str base-class " " (:class item))]
+        (dom/li #js{:onTouchEnd #(set! (.-hash js/location) href)
                     :className class} title)))))
 
 (defn list-view [page owner]
   (reify
-    om/IRender
-    (render [this]
-      (apply dom/ul #js{:className (:class page)}
-        (om/build-all list-item (:items page))))))
+    om/IInitState
+    (init-state [_] {:y 0 
+                     :drag-events (chan)
+                     :drag-start-point 0
+                     :y-at-start-drag 0})
+    om/IWillMount
+    (will-mount [_]
+      (let [drag-events (om/get-state owner :drag-events)]
+        (go (loop []
+              (let [drag-event (<! drag-events)
+                    y (:y drag-event)]
+                (condp = (:type drag-event)
+                  :start (do
+                           (om/set-state! owner :drag-start-point y)
+                           (om/set-state! owner :y-at-start-drag (om/get-state owner :y)))
+                  (om/set-state! owner :y (- y 
+                                            (- 
+                                              (om/get-state owner :drag-start-point)
+                                              (om/get-state owner :y-at-start-drag))))))
+              (recur)))))
+    om/IDidMount
+    (did-mount [_]
+      (let [scroller (om/get-node owner "scroller")
+            drag-events (om/get-state owner :drag-events)]
+        (drag scroller (fn [_] true) drag-events)))
+    om/IRenderState
+    (render-state [this {:keys [y]}]
+      (dom/div #js{:id "wrapper"}
+        (dom/div #js{:id "scroller" :ref "scroller" 
+                     :style #js{:transform (str "translate3d(0, " y "px, 0)")}}
+          (apply dom/ul #js{:className (:class page)}
+            (om/build-all list-item (:items page))))))))
 
 (defn image-view [page owner]
   (reify
@@ -47,16 +76,21 @@
                                title (:title item)
                                base-class "side-menu-list-item"
                                class (if (= idx current-page) (str base-class " active") base-class)]
-                           (dom/li #js{:onClick #(set! (.-hash js/location) (str "/pages/" idx))
+                           (dom/li #js{:onTouchEnd #(set! (.-hash js/location) (str "/pages/" idx))
                                        :className class} title))) items))))))
 
 (defn main-page [menu-state owner]
   (reify
+    om/IDidMount
+    (did-mount [_]
+      (let [height (.-offsetHeight (om/get-node owner "page-container"))]
+        (set! (.-height (.-style (om/get-node owner "page-container"))) (str (- height 40) "px"))))
     om/IRender
     (render [this]
       (let [page-id (:page-id (nth (:items menu-state) (:current-page menu-state)))
             page (page-id menu-state)]
-        (om/build (:component page) (:state page))))))
+        (dom/div #js {:id "page-container" :ref "page-container"}
+          (om/build (:component page) (:state page)))))))
 
 (defn menu-view [menu-state owner]
   (reify
@@ -68,12 +102,12 @@
        :drag-start-point 0
        :drag-events (drag js/document 
                       (fn [e] 
-                        (let [x (.-clientX e)
+                        (let [x (.-clientX (aget (.-changedTouches (.-event_ e)) 0))
                               menu-width (om/get-state owner :menu-width)
                               x-pos (om/get-state owner :menu-x-pos)]
                           (if (= x-pos 0)
                             (and (> x 0) (< x (+ x-pos menu-width)))
-                            (and (> x 0) (< x 20))))))})
+                            (and (> x 0) (< x 40))))))})
 
     om/IWillMount
     (will-mount [_]
@@ -123,17 +157,18 @@
     (render-state [this {:keys [menu-x-pos menu-width]}]
       (let [pub-chan (:pub-chan (om/get-shared owner))]
         (dom/div #js{:className "full-height"}
-          (dom/div #js{:id "main-page-wrapper"}
+          (dom/div #js{:id "main-page-wrapper" :ref "main-page-wrapper"}
             (dom/div #js{:id "top-bar"}
               (dom/button 
-                #js{:id "hamburger-btn" :onClick #(put! pub-chan {:topic :menu :data :on})} "\u2630"))
+                #js{:id "hamburger-btn" 
+                    :onTouchEnd #(put! pub-chan {:topic :menu :data :on})} "\u2630"))
             (om/build main-page menu-state)
             (let [percent-showing (/ (- menu-width (.abs js/Math menu-x-pos)) menu-width)
                   menu-on? (if (> percent-showing 0) true false)]
               (dom/div #js{:style #js{:opacity percent-showing
                                       :visibility (if (> percent-showing 0) "visible" "hidden")}
                            :className "main-page-overlay"
-                           :onClick #(put! pub-chan {:topic :menu :data :off})})))
+                           :onTouchEnd #(put! pub-chan {:topic :menu :data :off})})))
           (dom/div #js{:id "left-slide-menu" 
                        :style #js{:transform (str "translate3d(" menu-x-pos "px, 0, 0)")}
                        :ref "slide-menu"} 

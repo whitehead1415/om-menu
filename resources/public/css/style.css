@@ -20,7 +20,7 @@ body {
 
 #left-slide-menu {
     position: fixed;
-    z-index: 0;
+    z-index: 3;
     top: 0;
     left: 0;
     width: 80%;
@@ -55,6 +55,39 @@ ul {
     margin: none;
     font-size: 18pt;
     text-align: left;
+    border-bottom: solid black 1px;
+}
+
+#page-container {
+    margin: 0;
+    position: relative;
+    height: 100%;
+}
+
+#wrapper {
+    position:absolute;
+    top: 0px;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    overflow: hidden;
+}
+
+#scroller {
+    transform: translate3d(0, 200px 0);
+}
+
+#scroller ul {
+    margin: 0;
+}
+
+.inner-list {
+    margin: 0;
+}
+
+.default-list-item {
+    height: 3em;
+    width: 100%;
     border-bottom: solid black 1px;
 }
 

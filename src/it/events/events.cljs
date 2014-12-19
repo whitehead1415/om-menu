@@ -1,10 +1,9 @@
 (ns it.events
   (:require-macros [cljs.core.async.macros :refer [go]])
-  (:require [cljs.core.async :as async :refer [>! <! put! chan close!]]
+  (:require [cljs.core.async :as async :refer [>! <! put! chan close! sub]]
             [goog.events :as events]
             [goog.history.EventType :as HistoryEventType])
-  (:import goog.History
-           [goog.events EventType]))
+  (:import [goog.events EventType]))
 
 (def keyword->event-type
   {:mousedown EventType/MOUSEDOWN
@@ -51,14 +50,3 @@
                (close! out))))
        out)))
 
-
-(defn nav-chans [pub-chan]
-  (let [h (History.)
-        in (chan)]
-    (doto h (.setEnabled true))
-    (go (loop []
-          (if-let [token (<! in)]
-            (doto h (.setToken token)))
-          (recur))
-        (close! in))
-    {:in in :out (listen h :history)}))
